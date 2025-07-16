@@ -2,6 +2,7 @@
 Google Sheets Service for BOL Processor
 Python Flask service that receives CSV data and adds it to Google Sheets
 Uses service account authentication (no CORS, no popups)
+Works with both .env files (development) and system environment variables (production)
 """
 
 from flask import Flask, request, jsonify
@@ -16,8 +17,9 @@ from datetime import datetime
 import logging
 from dotenv import load_dotenv
 
-# Load environment variables
-load_dotenv()
+# Load environment variables from .env file if it exists
+if os.path.exists('.env'):
+    load_dotenv()
 
 # Configure logging
 log_level = os.getenv('LOG_LEVEL', 'INFO')
@@ -71,11 +73,14 @@ def get_config():
     if not sheet_name:
         raise ValueError("SHEET_NAME environment variable is required")
     
+    # Use PORT from cloud platforms (like Render) if available, otherwise fall back to FLASK_PORT
+    port = os.getenv('PORT') or os.getenv('FLASK_PORT', '5550')
+    
     return {
         'spreadsheet_id': spreadsheet_id,
         'sheet_name': sheet_name,
         'flask_host': os.getenv('FLASK_HOST', '0.0.0.0'),
-        'flask_port': int(os.getenv('FLASK_PORT', '5550')),
+        'flask_port': int(port),
         'flask_debug': os.getenv('FLASK_DEBUG', 'True').lower() == 'true'
     }
 
@@ -86,6 +91,10 @@ try:
     SHEET_NAME = config['sheet_name']
     logger.info("✅ Configuration loaded successfully")
     logger.info(f"📊 Target Sheet: {SPREADSHEET_ID} - '{SHEET_NAME}'")
+    if os.path.exists('.env'):
+        logger.info("📁 Using .env file for configuration (development mode)")
+    else:
+        logger.info("🌐 Using system environment variables (production mode)")
 except Exception as e:
     logger.error(f"❌ Configuration error: {str(e)}")
     raise

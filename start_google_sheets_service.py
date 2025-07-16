@@ -2,6 +2,7 @@
 """
 Google Sheets Service Startup Script
 Simple script to start the Google Sheets service for BOL processing
+Works with both .env files (development) and system environment variables (production)
 """
 
 import os
@@ -48,8 +49,12 @@ def install_dependencies(packages):
 
 def check_environment_variables():
     """Check if required environment variables are set"""
-    # Load environment variables
-    load_dotenv()
+    # Try to load .env file if it exists (for development)
+    if os.path.exists('.env'):
+        print("📁 Found .env file, loading environment variables...")
+        load_dotenv()
+    else:
+        print("🌐 No .env file found, using system environment variables (production mode)")
     
     required_vars = [
         'GOOGLE_PROJECT_ID',
@@ -79,20 +84,19 @@ def main():
         print("💡 Make sure you're running this from the correct directory")
         return False
 
-    # Check if .env file exists
-    if not os.path.exists('.env'):
-        print("❌ .env file not found!")
-        print("💡 Please create a .env file with your configuration.")
-        print("   See environment_variables.txt for the template.")
-        return False
-
-    # Check environment variables
+    # Check environment variables (works with or without .env file)
     print("🔍 Checking environment variables...")
     missing_vars = check_environment_variables()
     if missing_vars:
         print(f"❌ Missing environment variables: {', '.join(missing_vars)}")
-        print("💡 Please check your .env file and ensure all required variables are set.")
-        print("   See environment_variables.txt for the template.")
+        if os.path.exists('.env'):
+            print("💡 Please check your .env file and ensure all required variables are set.")
+            print("   See environment_variables.txt for the template.")
+        else:
+            print("💡 For production deployment, set these environment variables in your hosting platform:")
+            for var in missing_vars:
+                print(f"   - {var}")
+            print("\n📖 Refer to your hosting platform's documentation for setting environment variables.")
         return False
     
     print("✅ Environment variables loaded successfully")
@@ -100,12 +104,15 @@ def main():
     # Check dependencies
     print("🔍 Checking dependencies...")
     
-    # Load configuration to display info
-    load_dotenv()
+    # Load configuration to display info (try .env first, then system env)
+    if os.path.exists('.env'):
+        load_dotenv()
+    
     spreadsheet_id = os.getenv('SPREADSHEET_ID')
     sheet_name = os.getenv('SHEET_NAME') 
     flask_host = os.getenv('FLASK_HOST', '0.0.0.0')
-    flask_port = os.getenv('FLASK_PORT', '5550')
+    # Use PORT from cloud platforms (like Render) if available, otherwise fall back to FLASK_PORT
+    flask_port = os.getenv('PORT') or os.getenv('FLASK_PORT', '5550')
     
     # Start the service
     print("\n🔄 Starting Google Sheets service...")
@@ -137,7 +144,7 @@ def main():
         return False
     except ValueError as e:
         print(f"❌ Configuration error: {e}")
-        print("💡 Please check your .env file configuration")
+        print("💡 Please check your environment variables configuration")
         return False
     except KeyboardInterrupt:
         print("\n\n🛑 Service stopped by user")

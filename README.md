@@ -2,6 +2,8 @@
 
 A Python Flask service that receives CSV data and adds it to Google Sheets using service account authentication.
 
+**✨ Production Ready**: Works with both `.env` files (development) and system environment variables (production platforms like Render, Heroku, etc.)
+
 ## 🚀 Quick Setup
 
 ### 1. Install Dependencies
@@ -128,6 +130,18 @@ curl -X POST http://localhost:5550/upload-csv \
 - Check the console output for detailed error messages
 - Verify your Google Cloud service account setup
 - Ensure the target spreadsheet is shared with your service account email
+
+## 🌐 Production Deployment
+
+For production deployment to cloud platforms like Render.com, see the detailed guide:
+
+**📖 [Production Deployment Guide](./PRODUCTION_DEPLOY.md)**
+
+Key points for production:
+- No `.env` file needed - uses system environment variables
+- Automatically detects cloud platform ports (PORT environment variable)
+- Set `FLASK_DEBUG=False` for production
+- Configure all environment variables in your hosting platform's dashboard
 
 ## 📝 Development
 
