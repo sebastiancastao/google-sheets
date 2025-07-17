@@ -190,6 +190,63 @@ def parse_csv_content(csv_content):
         logger.error(f"❌ CSV parsing failed: {str(e)}")
         raise ValueError(f"Invalid CSV format: {str(e)}")
 
+def detect_data_type(csv_content, header=None, data_rows=None):
+    """Detect if CSV data is IHL or Allura based on content analysis"""
+    try:
+        # If header and data_rows aren't provided, parse them
+        if header is None or data_rows is None:
+            header, data_rows = parse_csv_content(csv_content)
+        
+        # Convert all content to lowercase for case-insensitive matching
+        content_lower = csv_content.lower()
+        header_lower = [col.lower() for col in header] if header else []
+        
+        # IHL detection keywords and patterns
+        ihl_indicators = [
+            'ihl', 'sensual', 'sensuelle', 'intimate', 'intimates',
+            'lingerie', 'bra', 'panty', 'panties', 'sleepwear',
+            'nightwear', 'hosiery', 'shapewear', 'bodysuit'
+        ]
+        
+        # Check content for IHL indicators
+        ihl_score = 0
+        for indicator in ihl_indicators:
+            if indicator in content_lower:
+                ihl_score += content_lower.count(indicator)
+        
+        # Check header columns for IHL-specific terms
+        header_ihl_score = 0
+        for col in header_lower:
+            for indicator in ihl_indicators:
+                if indicator in col:
+                    header_ihl_score += 2  # Header matches are weighted higher
+        
+        total_ihl_score = ihl_score + header_ihl_score
+        
+        # Additional pattern checks
+        pattern_score = 0
+        if 'sensual' in content_lower or 'sensuelle' in content_lower:
+            pattern_score += 5  # Strong indicator
+        if 'intimate' in content_lower and 'apparel' in content_lower:
+            pattern_score += 3
+        
+        total_score = total_ihl_score + pattern_score
+        
+        # Decision logic: if score >= 3, likely IHL data
+        is_ihl = total_score >= 3
+        
+        detected_type = 'ihl' if is_ihl else 'allura'
+        
+        logger.info(f"🔍 Data type detection: {detected_type.upper()} (score: {total_score})")
+        if total_score > 0:
+            logger.info(f"📝 IHL indicators found: content_matches={ihl_score}, header_matches={header_ihl_score}, patterns={pattern_score}")
+        
+        return detected_type, total_score
+        
+    except Exception as e:
+        logger.warning(f"⚠️ Data type detection failed, defaulting to Allura: {str(e)}")
+        return 'allura', 0
+
 @app.route('/health', methods=['GET'])
 def health_check():
     """Health check endpoint"""
@@ -339,12 +396,47 @@ def upload_csv_generic(data_type='allura'):
 
 @app.route('/upload-csv', methods=['POST'])
 def upload_csv():
-    """Upload CSV data to Allura Google Sheets (default)"""
+    """Upload CSV data with automatic data type detection and routing"""
+    try:
+        # Get CSV content from request for detection
+        data = request.get_json()
+        
+        if not data or 'csvContent' not in data:
+            return jsonify({
+                'success': False,
+                'error': 'No CSV content provided'
+            }), 400
+        
+        csv_content = data['csvContent']
+        
+        if not csv_content or not csv_content.strip():
+            return jsonify({
+                'success': False,
+                'error': 'Empty CSV content'
+            }), 400
+        
+        # Detect data type automatically
+        detected_type, detection_score = detect_data_type(csv_content)
+        
+        logger.info(f"🎯 Auto-routing to {detected_type.upper()} endpoint (detection score: {detection_score})")
+        
+        # Route to the appropriate function based on detection
+        return upload_csv_generic(detected_type)
+        
+    except Exception as e:
+        logger.error(f"❌ Auto-detection upload failed: {str(e)}")
+        # Fallback to Allura if detection fails
+        logger.info("🔄 Falling back to Allura processing")
+        return upload_csv_generic('allura')
+
+@app.route('/upload-csv-allura', methods=['POST'])
+def upload_csv_allura():
+    """Upload CSV data to Allura Google Sheets (explicit)"""
     return upload_csv_generic('allura')
 
 @app.route('/upload-csv-ihl', methods=['POST'])
 def upload_csv_ihl():
-    """Upload CSV data to IHL Google Sheets"""
+    """Upload CSV data to IHL Google Sheets (explicit)"""
     return upload_csv_generic('ihl')
 
 def get_sheet_info_generic(data_type='allura'):

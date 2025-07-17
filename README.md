@@ -9,6 +9,17 @@ A Python Flask service that receives CSV data and adds it to Google Sheets using
 - **Allura Data**: Default processing for Allura combined data files
 - **IHL Data**: Specialized processing for IHL combined data files with "IHL Test" tab
 
+## 🤖 Smart Auto-Detection
+
+The service now includes intelligent data type detection! When you upload CSV data to `/upload-csv`, it automatically:
+
+- **Analyzes CSV content** for IHL-specific keywords like "sensual", "intimate", "lingerie", etc.
+- **Scans header columns** for intimate apparel terminology  
+- **Routes data automatically** to the correct Google Sheet (Allura or IHL)
+- **Falls back to Allura** if detection is uncertain
+
+**Detection Keywords**: `ihl`, `sensual`, `sensuelle`, `intimate`, `intimates`, `lingerie`, `bra`, `panty`, `panties`, `sleepwear`, `nightwear`, `hosiery`, `shapewear`, `bodysuit`
+
 ## 🚀 Quick Setup
 
 ### 1. Install Dependencies
@@ -76,11 +87,16 @@ python google_sheets_service.py
 |--------|----------|-------------|
 | GET | `/health` | Health check for both Allura and IHL sheets |
 
+### Smart Upload Endpoint
+| Method | Endpoint | Description |
+|--------|----------|-------------|
+| POST | `/upload-csv` | **🤖 Smart Upload** - Automatically detects data type (IHL/Allura) and routes to correct sheet |
+
 ### Allura Data Endpoints
 | Method | Endpoint | Description |
 |--------|----------|-------------|
 | GET | `/test` | Test Allura Google Sheets connection |
-| POST | `/upload-csv` | Upload CSV data to Allura sheet |
+| POST | `/upload-csv-allura` | Upload CSV data to Allura sheet (explicit) |
 | GET | `/sheet-info` | Get Allura sheet information |
 | POST | `/clear-test-data` | Clear test data from Allura sheet |
 
@@ -88,7 +104,7 @@ python google_sheets_service.py
 | Method | Endpoint | Description |
 |--------|----------|-------------|
 | GET | `/test-ihl` | Test IHL Google Sheets connection |
-| POST | `/upload-csv-ihl` | Upload CSV data to IHL sheet ("IHL Test" tab) |
+| POST | `/upload-csv-ihl` | Upload CSV data to IHL sheet (explicit) |
 | GET | `/sheet-info-ihl` | Get IHL sheet information |
 | POST | `/clear-test-data-ihl` | Clear test data from IHL sheet |
 
@@ -131,18 +147,25 @@ curl http://localhost:5550/test
 curl http://localhost:5550/test-ihl
 ```
 
-### Upload CSV data to Allura sheet:
+### Smart Upload (Automatic Detection):
 ```bash
+# This will automatically detect if data is IHL or Allura and route accordingly
 curl -X POST http://localhost:5550/upload-csv \
   -H "Content-Type: application/json" \
   -d '{"csvContent": "Name,Age,City\nJohn,30,NYC\nJane,25,LA"}'
 ```
 
-### Upload CSV data to IHL sheet:
+### Upload CSV data to specific sheets:
 ```bash
-curl -X POST http://localhost:5550/upload-csv-ihl \
+# Explicit Allura upload
+curl -X POST http://localhost:5550/upload-csv-allura \
   -H "Content-Type: application/json" \
   -d '{"csvContent": "Name,Age,City\nJohn,30,NYC\nJane,25,LA"}'
+
+# Explicit IHL upload
+curl -X POST http://localhost:5550/upload-csv-ihl \
+  -H "Content-Type: application/json" \
+  -d '{"csvContent": "Product,Category,Brand\nSensual Bra,Intimates,Brand"}'
 ```
 
 ### Get sheet information:
