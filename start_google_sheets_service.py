@@ -63,7 +63,9 @@ def check_environment_variables():
         'GOOGLE_CLIENT_EMAIL',
         'GOOGLE_CLIENT_ID',
         'SPREADSHEET_ID',
-        'SHEET_NAME'
+        'SHEET_NAME',
+        'IHL_SPREADSHEET_ID',
+        'IHL_SHEET_NAME'
     ]
     
     missing_vars = []
@@ -108,8 +110,14 @@ def main():
     if os.path.exists('.env'):
         load_dotenv()
     
+    # Allura configuration
     spreadsheet_id = os.getenv('SPREADSHEET_ID')
-    sheet_name = os.getenv('SHEET_NAME') 
+    sheet_name = os.getenv('SHEET_NAME')
+    
+    # IHL configuration
+    ihl_spreadsheet_id = os.getenv('IHL_SPREADSHEET_ID')
+    ihl_sheet_name = os.getenv('IHL_SHEET_NAME')
+    
     flask_host = os.getenv('FLASK_HOST', '0.0.0.0')
     # Use PORT from cloud platforms (like Render) if available, otherwise fall back to FLASK_PORT
     flask_port = os.getenv('PORT') or os.getenv('FLASK_PORT', '5550')
@@ -117,13 +125,18 @@ def main():
     # Start the service
     print("\n🔄 Starting Google Sheets service...")
     print(f"🌐 Service will be available at: http://{flask_host}:{flask_port}")
-    print(f"📊 Target Google Sheet: {spreadsheet_id}")
-    print(f"📋 Sheet name: '{sheet_name}'")
+    print(f"📊 Allura Target Sheet: {spreadsheet_id} - '{sheet_name}'")
+    print(f"📊 IHL Target Sheet: {ihl_spreadsheet_id} - '{ihl_sheet_name}'")
     print("\n🔧 Available endpoints:")
-    print(f"   GET  http://{flask_host}:{flask_port}/health - Health check")
-    print(f"   GET  http://{flask_host}:{flask_port}/test - Test Google Sheets connection")
-    print(f"   POST http://{flask_host}:{flask_port}/upload-csv - Upload CSV data to Google Sheets")
-    print(f"   GET  http://{flask_host}:{flask_port}/sheet-info - Get sheet information")
+    print(f"   GET  http://{flask_host}:{flask_port}/health - Health check (both sheets)")
+    print(f"   GET  http://{flask_host}:{flask_port}/test - Test Allura connection")
+    print(f"   GET  http://{flask_host}:{flask_port}/test-ihl - Test IHL connection")
+    print(f"   POST http://{flask_host}:{flask_port}/upload-csv - Upload CSV to Allura sheet")
+    print(f"   POST http://{flask_host}:{flask_port}/upload-csv-ihl - Upload CSV to IHL sheet")
+    print(f"   GET  http://{flask_host}:{flask_port}/sheet-info - Get Allura sheet info")
+    print(f"   GET  http://{flask_host}:{flask_port}/sheet-info-ihl - Get IHL sheet info")
+    print(f"   POST http://{flask_host}:{flask_port}/clear-test-data - Clear Allura test data")
+    print(f"   POST http://{flask_host}:{flask_port}/clear-test-data-ihl - Clear IHL test data")
     print("\n💡 Test from browser console:")
     print("   await bolProcessor.testPythonService()")
     print("\n🛑 Press Ctrl+C to stop the service")

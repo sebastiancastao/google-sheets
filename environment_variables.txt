@@ -8,9 +8,13 @@ GOOGLE_PRIVATE_KEY="-----BEGIN PRIVATE KEY-----\nMIIEvgIBADANBgkqhkiG9w0BAQEFAAS
 GOOGLE_CLIENT_EMAIL=midas-371@upheld-dragon-464217-e8.iam.gserviceaccount.com
 GOOGLE_CLIENT_ID=108604986820777256452
 
-# Google Sheets Configuration
+# Allura Google Sheets Configuration
 SPREADSHEET_ID=1NMrh29v0eOJLNBHGdy2T6NLSnc3zalg2Wj_O0ZSJ97g
 SHEET_NAME=Allura Test
+
+# IHL Google Sheets Configuration
+IHL_SPREADSHEET_ID=your_ihl_spreadsheet_id_here
+IHL_SHEET_NAME=IHL Test
 
 # Flask Server Configuration
 FLASK_HOST=0.0.0.0
@@ -23,5 +27,7 @@ LOG_LEVEL=INFO
 # Instructions:
 # 1. Copy this file content to a new file named ".env"
 # 2. Update the values above with your actual credentials
-# 3. Make sure .env is in your .gitignore file
-# 4. The service will automatically load these variables 
+# 3. Replace "your_ihl_spreadsheet_id_here" with your actual IHL spreadsheet ID
+# 4. Make sure .env is in your .gitignore file
+# 5. The service will automatically load these variables 
+# 6. Both Allura and IHL data processing will be available through different endpoints 

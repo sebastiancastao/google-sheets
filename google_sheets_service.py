@@ -65,13 +65,22 @@ def get_service_account_info():
 
 def get_config():
     """Get configuration from environment variables"""
+    # Allura configuration
     spreadsheet_id = os.getenv('SPREADSHEET_ID')
     sheet_name = os.getenv('SHEET_NAME')
+    
+    # IHL configuration
+    ihl_spreadsheet_id = os.getenv('IHL_SPREADSHEET_ID')
+    ihl_sheet_name = os.getenv('IHL_SHEET_NAME')
     
     if not spreadsheet_id:
         raise ValueError("SPREADSHEET_ID environment variable is required")
     if not sheet_name:
         raise ValueError("SHEET_NAME environment variable is required")
+    if not ihl_spreadsheet_id:
+        raise ValueError("IHL_SPREADSHEET_ID environment variable is required")
+    if not ihl_sheet_name:
+        raise ValueError("IHL_SHEET_NAME environment variable is required")
     
     # Use PORT from cloud platforms (like Render) if available, otherwise fall back to FLASK_PORT
     port = os.getenv('PORT') or os.getenv('FLASK_PORT', '5550')
@@ -79,6 +88,8 @@ def get_config():
     return {
         'spreadsheet_id': spreadsheet_id,
         'sheet_name': sheet_name,
+        'ihl_spreadsheet_id': ihl_spreadsheet_id,
+        'ihl_sheet_name': ihl_sheet_name,
         'flask_host': os.getenv('FLASK_HOST', '0.0.0.0'),
         'flask_port': int(port),
         'flask_debug': os.getenv('FLASK_DEBUG', 'True').lower() == 'true'
@@ -89,8 +100,11 @@ try:
     config = get_config()
     SPREADSHEET_ID = config['spreadsheet_id']
     SHEET_NAME = config['sheet_name']
+    IHL_SPREADSHEET_ID = config['ihl_spreadsheet_id']
+    IHL_SHEET_NAME = config['ihl_sheet_name']
     logger.info("✅ Configuration loaded successfully")
-    logger.info(f"📊 Target Sheet: {SPREADSHEET_ID} - '{SHEET_NAME}'")
+    logger.info(f"📊 Allura Target Sheet: {SPREADSHEET_ID} - '{SHEET_NAME}'")
+    logger.info(f"📊 IHL Target Sheet: {IHL_SPREADSHEET_ID} - '{IHL_SHEET_NAME}'")
     if os.path.exists('.env'):
         logger.info("📁 Using .env file for configuration (development mode)")
     else:
@@ -113,6 +127,25 @@ def get_sheets_client():
         return client
     except Exception as e:
         logger.error(f"❌ Failed to initialize Google Sheets client: {str(e)}")
+        raise
+
+def get_worksheet(data_type='allura'):
+    """Get the appropriate worksheet based on data type"""
+    try:
+        client = get_sheets_client()
+        
+        if data_type.lower() == 'ihl':
+            spreadsheet = client.open_by_key(IHL_SPREADSHEET_ID)
+            worksheet = spreadsheet.worksheet(IHL_SHEET_NAME)
+            logger.info(f"📊 Connected to IHL sheet: {worksheet.title}")
+        else:  # default to allura
+            spreadsheet = client.open_by_key(SPREADSHEET_ID)
+            worksheet = spreadsheet.worksheet(SHEET_NAME)
+            logger.info(f"📊 Connected to Allura sheet: {worksheet.title}")
+        
+        return client, spreadsheet, worksheet
+    except Exception as e:
+        logger.error(f"❌ Failed to get {data_type} worksheet: {str(e)}")
         raise
 
 def column_number_to_letter(column_number):
@@ -163,18 +196,21 @@ def health_check():
     return jsonify({
         'status': 'healthy',
         'service': 'Google Sheets BOL Processor',
-        'spreadsheet_id': SPREADSHEET_ID,
-        'sheet_name': SHEET_NAME,
+        'allura_config': {
+            'spreadsheet_id': SPREADSHEET_ID,
+            'sheet_name': SHEET_NAME
+        },
+        'ihl_config': {
+            'spreadsheet_id': IHL_SPREADSHEET_ID,
+            'sheet_name': IHL_SHEET_NAME
+        },
         'timestamp': datetime.now().isoformat()
     })
 
-@app.route('/test', methods=['GET'])
-def test_connection():
-    """Test Google Sheets connection"""
+def test_connection_generic(data_type='allura'):
+    """Generic function to test Google Sheets connection"""
     try:
-        client = get_sheets_client()
-        spreadsheet = client.open_by_key(SPREADSHEET_ID)
-        worksheet = spreadsheet.worksheet(SHEET_NAME)
+        client, spreadsheet, worksheet = get_worksheet(data_type)
         
         # Get basic sheet info
         sheet_info = {
@@ -182,28 +218,39 @@ def test_connection():
             'sheet_name': worksheet.title,
             'row_count': worksheet.row_count,
             'col_count': worksheet.col_count,
-            'last_row_with_data': len(worksheet.get_all_values())
+            'last_row_with_data': len(worksheet.get_all_values()),
+            'data_type': data_type.upper()
         }
         
-        logger.info("✅ Google Sheets connection test successful")
+        logger.info(f"✅ {data_type.upper()} Google Sheets connection test successful")
         return jsonify({
             'success': True,
-            'message': 'Google Sheets connection successful',
+            'message': f'{data_type.upper()} Google Sheets connection successful',
             'sheet_info': sheet_info,
             'timestamp': datetime.now().isoformat()
         })
         
     except Exception as e:
-        logger.error(f"❌ Google Sheets connection test failed: {str(e)}")
+        logger.error(f"❌ {data_type.upper()} Google Sheets connection test failed: {str(e)}")
         return jsonify({
             'success': False,
             'error': str(e),
+            'data_type': data_type.upper(),
             'timestamp': datetime.now().isoformat()
         }), 500
 
-@app.route('/upload-csv', methods=['POST'])
-def upload_csv():
-    """Upload CSV data to Google Sheets"""
+@app.route('/test', methods=['GET'])
+def test_connection():
+    """Test Allura Google Sheets connection (default)"""
+    return test_connection_generic('allura')
+
+@app.route('/test-ihl', methods=['GET'])
+def test_connection_ihl():
+    """Test IHL Google Sheets connection"""
+    return test_connection_generic('ihl')
+
+def upload_csv_generic(data_type='allura'):
+    """Generic function to upload CSV data to Google Sheets"""
     try:
         # Get CSV content from request
         data = request.get_json()
@@ -222,7 +269,7 @@ def upload_csv():
                 'error': 'Empty CSV content'
             }), 400
         
-        logger.info(f"📥 Received CSV upload request ({len(csv_content)} characters)")
+        logger.info(f"📥 Received {data_type.upper()} CSV upload request ({len(csv_content)} characters)")
         
         # Parse CSV content
         header, data_rows = parse_csv_content(csv_content)
@@ -233,12 +280,8 @@ def upload_csv():
                 'error': 'No data rows to add'
             }), 400
         
-        # Connect to Google Sheets
-        client = get_sheets_client()
-        spreadsheet = client.open_by_key(SPREADSHEET_ID)
-        worksheet = spreadsheet.worksheet(SHEET_NAME)
-        
-        logger.info(f"📊 Connected to sheet: {worksheet.title}")
+        # Connect to appropriate Google Sheet
+        client, spreadsheet, worksheet = get_worksheet(data_type)
         
         # Find next empty row
         all_values = worksheet.get_all_values()
@@ -262,42 +305,52 @@ def upload_csv():
         
         end_row = start_row + len(data_rows) - 1
         
-        logger.info(f"✅ Successfully added {len(data_rows)} rows to Google Sheets")
+        logger.info(f"✅ Successfully added {len(data_rows)} rows to {data_type.upper()} Google Sheets")
         
         return jsonify({
             'success': True,
-            'message': f'Successfully added {len(data_rows)} rows to Google Sheets',
+            'message': f'Successfully added {len(data_rows)} rows to {data_type.upper()} Google Sheets',
             'rowsAdded': len(data_rows),
             'startRow': start_row,
             'endRow': end_row,
-            'sheetName': SHEET_NAME,
-            'spreadsheetId': SPREADSHEET_ID,
+            'sheetName': worksheet.title,
+            'spreadsheetId': spreadsheet.id,
+            'dataType': data_type.upper(),
             'timestamp': datetime.now().isoformat()
         })
         
     except ValueError as ve:
-        logger.error(f"❌ Validation error: {str(ve)}")
+        logger.error(f"❌ {data_type.upper()} validation error: {str(ve)}")
         return jsonify({
             'success': False,
             'error': str(ve),
+            'dataType': data_type.upper(),
             'timestamp': datetime.now().isoformat()
         }), 400
         
     except Exception as e:
-        logger.error(f"❌ Upload failed: {str(e)}")
+        logger.error(f"❌ {data_type.upper()} upload failed: {str(e)}")
         return jsonify({
             'success': False,
             'error': f'Upload failed: {str(e)}',
+            'dataType': data_type.upper(),
             'timestamp': datetime.now().isoformat()
         }), 500
 
-@app.route('/sheet-info', methods=['GET'])
-def get_sheet_info():
-    """Get information about the target sheet"""
+@app.route('/upload-csv', methods=['POST'])
+def upload_csv():
+    """Upload CSV data to Allura Google Sheets (default)"""
+    return upload_csv_generic('allura')
+
+@app.route('/upload-csv-ihl', methods=['POST'])
+def upload_csv_ihl():
+    """Upload CSV data to IHL Google Sheets"""
+    return upload_csv_generic('ihl')
+
+def get_sheet_info_generic(data_type='allura'):
+    """Generic function to get information about the target sheet"""
     try:
-        client = get_sheets_client()
-        spreadsheet = client.open_by_key(SPREADSHEET_ID)
-        worksheet = spreadsheet.worksheet(SHEET_NAME)
+        client, spreadsheet, worksheet = get_worksheet(data_type)
         
         # Get sheet data
         all_values = worksheet.get_all_values()
@@ -306,13 +359,14 @@ def get_sheet_info():
         
         sheet_info = {
             'spreadsheet_title': spreadsheet.title,
-            'spreadsheet_id': SPREADSHEET_ID,
+            'spreadsheet_id': spreadsheet.id,
             'sheet_name': worksheet.title,
             'total_rows': len(all_values),
             'data_rows': len(data_rows),
             'columns': len(header),
             'header': header,
-            'last_5_rows': data_rows[-5:] if len(data_rows) >= 5 else data_rows
+            'last_5_rows': data_rows[-5:] if len(data_rows) >= 5 else data_rows,
+            'data_type': data_type.upper()
         }
         
         return jsonify({
@@ -322,20 +376,28 @@ def get_sheet_info():
         })
         
     except Exception as e:
-        logger.error(f"❌ Failed to get sheet info: {str(e)}")
+        logger.error(f"❌ Failed to get {data_type.upper()} sheet info: {str(e)}")
         return jsonify({
             'success': False,
             'error': str(e),
+            'data_type': data_type.upper(),
             'timestamp': datetime.now().isoformat()
         }), 500
 
-@app.route('/clear-test-data', methods=['POST'])
-def clear_test_data():
-    """Clear test data from the sheet (rows containing 'TEST'"""
+@app.route('/sheet-info', methods=['GET'])
+def get_sheet_info():
+    """Get information about the Allura target sheet (default)"""
+    return get_sheet_info_generic('allura')
+
+@app.route('/sheet-info-ihl', methods=['GET'])
+def get_sheet_info_ihl():
+    """Get information about the IHL target sheet"""
+    return get_sheet_info_generic('ihl')
+
+def clear_test_data_generic(data_type='allura'):
+    """Generic function to clear test data from the sheet (rows containing 'TEST')"""
     try:
-        client = get_sheets_client()
-        spreadsheet = client.open_by_key(SPREADSHEET_ID)
-        worksheet = spreadsheet.worksheet(SHEET_NAME)
+        client, spreadsheet, worksheet = get_worksheet(data_type)
         
         # Get all data
         all_values = worksheet.get_all_values()
@@ -349,30 +411,43 @@ def clear_test_data():
         if not rows_to_delete:
             return jsonify({
                 'success': True,
-                'message': 'No test data found to clear',
-                'rows_deleted': 0
+                'message': f'No test data found to clear in {data_type.upper()} sheet',
+                'rows_deleted': 0,
+                'data_type': data_type.upper()
             })
         
         # Delete rows (from bottom to top to avoid index shifting)
         for row_num in reversed(rows_to_delete):
             worksheet.delete_rows(row_num)
         
-        logger.info(f"✅ Deleted {len(rows_to_delete)} test rows")
+        logger.info(f"✅ Deleted {len(rows_to_delete)} test rows from {data_type.upper()} sheet")
         
         return jsonify({
             'success': True,
-            'message': f'Cleared {len(rows_to_delete)} test rows',
+            'message': f'Cleared {len(rows_to_delete)} test rows from {data_type.upper()} sheet',
             'rows_deleted': len(rows_to_delete),
+            'data_type': data_type.upper(),
             'timestamp': datetime.now().isoformat()
         })
         
     except Exception as e:
-        logger.error(f"❌ Failed to clear test data: {str(e)}")
+        logger.error(f"❌ Failed to clear {data_type.upper()} test data: {str(e)}")
         return jsonify({
             'success': False,
             'error': str(e),
+            'data_type': data_type.upper(),
             'timestamp': datetime.now().isoformat()
         }), 500
+
+@app.route('/clear-test-data', methods=['POST'])
+def clear_test_data():
+    """Clear test data from the Allura sheet (default)"""
+    return clear_test_data_generic('allura')
+
+@app.route('/clear-test-data-ihl', methods=['POST'])
+def clear_test_data_ihl():
+    """Clear test data from the IHL sheet"""
+    return clear_test_data_generic('ihl')
 
 if __name__ == '__main__':
     # Load configuration for development

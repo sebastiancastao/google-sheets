@@ -1,8 +1,13 @@
 # Google Sheets Service
 
-A Python Flask service that receives CSV data and adds it to Google Sheets using service account authentication.
+A Python Flask service that receives CSV data and adds it to Google Sheets using service account authentication. **Now supports dual sheet processing for both Allura and IHL data.**
 
 **✨ Production Ready**: Works with both `.env` files (development) and system environment variables (production platforms like Render, Heroku, etc.)
+
+## 📊 Supported Data Types
+
+- **Allura Data**: Default processing for Allura combined data files
+- **IHL Data**: Specialized processing for IHL combined data files with "IHL Test" tab
 
 ## 🚀 Quick Setup
 
@@ -37,9 +42,13 @@ GOOGLE_PRIVATE_KEY="-----BEGIN PRIVATE KEY-----\nyour-private-key-here\n-----END
 GOOGLE_CLIENT_EMAIL=your-service-account@your-project.iam.gserviceaccount.com
 GOOGLE_CLIENT_ID=your-client-id
 
-# Google Sheets Configuration
-SPREADSHEET_ID=your-spreadsheet-id
-SHEET_NAME=your-sheet-name
+# Allura Google Sheets Configuration
+SPREADSHEET_ID=your-allura-spreadsheet-id
+SHEET_NAME=Allura Test
+
+# IHL Google Sheets Configuration
+IHL_SPREADSHEET_ID=your-ihl-spreadsheet-id
+IHL_SHEET_NAME=IHL Test
 
 # Flask Server Configuration
 FLASK_HOST=0.0.0.0
@@ -62,12 +71,26 @@ python google_sheets_service.py
 
 ## 📊 API Endpoints
 
+### General Endpoints
 | Method | Endpoint | Description |
 |--------|----------|-------------|
-| GET | `/health` | Health check |
-| GET | `/test` | Test Google Sheets connection |
-| POST | `/upload-csv` | Upload CSV data to Google Sheets |
-| GET | `/sheet-info` | Get sheet information |
+| GET | `/health` | Health check for both Allura and IHL sheets |
+
+### Allura Data Endpoints
+| Method | Endpoint | Description |
+|--------|----------|-------------|
+| GET | `/test` | Test Allura Google Sheets connection |
+| POST | `/upload-csv` | Upload CSV data to Allura sheet |
+| GET | `/sheet-info` | Get Allura sheet information |
+| POST | `/clear-test-data` | Clear test data from Allura sheet |
+
+### IHL Data Endpoints
+| Method | Endpoint | Description |
+|--------|----------|-------------|
+| GET | `/test-ihl` | Test IHL Google Sheets connection |
+| POST | `/upload-csv-ihl` | Upload CSV data to IHL sheet ("IHL Test" tab) |
+| GET | `/sheet-info-ihl` | Get IHL sheet information |
+| POST | `/clear-test-data-ihl` | Clear test data from IHL sheet |
 
 ## 🔧 Configuration Options
 
@@ -80,8 +103,10 @@ python google_sheets_service.py
 | `GOOGLE_PRIVATE_KEY` | Service account private key | Required |
 | `GOOGLE_CLIENT_EMAIL` | Service account email | Required |
 | `GOOGLE_CLIENT_ID` | Service account client ID | Required |
-| `SPREADSHEET_ID` | Target Google Sheets ID | Required |
-| `SHEET_NAME` | Target sheet name | Required |
+| `SPREADSHEET_ID` | Allura Google Sheets ID | Required |
+| `SHEET_NAME` | Allura sheet name | Required |
+| `IHL_SPREADSHEET_ID` | IHL Google Sheets ID | Required |
+| `IHL_SHEET_NAME` | IHL sheet name (typically "IHL Test") | Required |
 | `FLASK_HOST` | Flask server host | `0.0.0.0` |
 | `FLASK_PORT` | Flask server port | `5550` |
 | `FLASK_DEBUG` | Enable debug mode | `True` |
@@ -96,16 +121,37 @@ python google_sheets_service.py
 
 ## 🔍 Testing
 
-### Test the connection:
+### Test Allura connection:
 ```bash
 curl http://localhost:5550/test
 ```
 
-### Upload CSV data:
+### Test IHL connection:
+```bash
+curl http://localhost:5550/test-ihl
+```
+
+### Upload CSV data to Allura sheet:
 ```bash
 curl -X POST http://localhost:5550/upload-csv \
   -H "Content-Type: application/json" \
   -d '{"csvContent": "Name,Age,City\nJohn,30,NYC\nJane,25,LA"}'
+```
+
+### Upload CSV data to IHL sheet:
+```bash
+curl -X POST http://localhost:5550/upload-csv-ihl \
+  -H "Content-Type: application/json" \
+  -d '{"csvContent": "Name,Age,City\nJohn,30,NYC\nJane,25,LA"}'
+```
+
+### Get sheet information:
+```bash
+# Allura sheet info
+curl http://localhost:5550/sheet-info
+
+# IHL sheet info
+curl http://localhost:5550/sheet-info-ihl
 ```
 
 ## 🐛 Troubleshooting
